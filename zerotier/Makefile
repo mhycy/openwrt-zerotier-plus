@@ -9,12 +9,14 @@ PKG_NAME:=zerotier
 PKG_VERSION:=1.8.4
 PKG_RELEASE:=$(AUTORELEASE)
 
-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
-PKG_SOURCE_URL:=https://codeload.github.com/zerotier/ZeroTierOne/tar.gz/$(PKG_VERSION)?
-PKG_HASH:=61b8c1ea5904cc87431939212033bb4d05d11f517860a01cac75f0090d94272b
+PKG_SOURCE_PROTO:=git
+PKG_SOURCE_URL:=https://github.com/mhycy/zerotier-plus.git
+PKG_SOURCE_DATE:=2022-01-24
+PKG_SOURCE_VERSION:=9a394e8f7683e1a5f148b3d61d6dc9ea631f1beb
+PKG_MIRROR_HASH:=skip
 PKG_BUILD_DIR:=$(BUILD_DIR)/ZeroTierOne-$(PKG_VERSION)
 
-PKG_MAINTAINER:=Moritz Warning <moritzwarning@web.de>
+PKG_MAINTAINER:=mhycy <i@mhycy.me>
 PKG_LICENSE:=BSL 1.1
 PKG_LICENSE_FILES:=LICENSE.txt
 

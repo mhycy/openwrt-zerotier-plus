@@ -1,0 +1,59 @@
+#!/bin/sh
+
+. /usr/share/libubox/jshn.sh
+
+wait_zerotier_online() {
+    local RETRY=$1
+    local INTERVAL=$2
+
+    local CURRENT_RETRY=0
+    while [[ `zerotier-cli info | grep info | wc -l` -eq 0 ]]; do
+        CURRENT_RETRY=$(( CURRENT_RETRY + 1 ))
+
+        if [[ $CURRENT_RETRY -gt $RETRY ]]; then
+            echo 0
+        else
+            sleep $INTERVAL
+        fi
+    done
+
+    echo 1
+}
+
+
+ZT_FW_TMP_DEVICE_NAME=""
+__parse_zerotier_network_list_json() {
+    local IDX=$2
+    local TARGET_NETWORK_ID=$3
+
+    local JSON_NETWORK_ID JSON_PORT_DEVICE_NAME
+    
+    json_select $IDX
+    json_get_var JSON_NETWORK_ID "id"
+    json_get_var JSON_PORT_DEVICE_NAME "portDeviceName"
+
+    if [[ $JSON_NETWORK_ID == $TARGET_NETWORK_ID && -z $ZT_FW_TMP_DEVICE_NAME ]];then
+        ZT_FW_TMP_DEVICE_NAME=$JSON_PORT_DEVICE_NAME
+    fi
+
+    json_select .. 
+}
+
+get_network_device_name() {
+    local NETWORK_ID=$2
+
+    # 读取网络信息
+    local ZEROTIER_CLI_LISTNETWORKS=`zerotier-cli listnetworks -j`
+    ZEROTIER_CLI_LISTNETWORKS="{\"networks\": $ZEROTIER_CLI_LISTNETWORKS}"
+
+    # 初始化 JSON 解析
+    json_init
+    json_load "$ZEROTIER_CLI_LISTNETWORKS"
+
+    ZT_FW_TMP_DEVICE_NAME=""
+    if json_is_a "networks" array; then
+        json_for_each_item __parse_zerotier_network_list_json "networks" $NETWORK_ID
+    fi
+    
+    eval "$1=\"$ZT_FW_TMP_DEVICE_NAME\""
+}

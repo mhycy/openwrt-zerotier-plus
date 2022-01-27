@@ -7,113 +7,202 @@ USE_PROCD=1
 PROG=/usr/bin/zerotier-one
 CONFIG_PATH=/var/lib/zerotier-one
 
-section_enabled() {
-	config_get_bool enabled "$1" 'enabled' 0
-	[ $enabled -ne 0 ]
-}
+start_zerotier() {
+    local ARGS=$1
+    local CONFIG_PATH=$2
 
-start_instance() {
-	local cfg="$1"
-	local port secret config_path local_conf copy_config_path path
-	local args=""
-
-	if ! section_enabled "$cfg"; then
-		echo "disabled in config"
-		return 1
-	fi
-
-	config_get config_path $cfg 'config_path'
-	config_get port $cfg 'port'
-	config_get secret $cfg 'secret'
-	config_get local_conf $cfg 'local_conf'
-	config_get_bool copy_config_path $cfg 'copy_config_path' 0
-
-	path=${CONFIG_PATH}_$cfg
-
-	# Remove existing link or folder
-	rm -rf $path
-
-	# Create link or copy files from CONFIG_PATH to config_path
-	if [ -n "$config_path" -a "$config_path" != "$path" ]; then
-		if [ ! -d "$config_path" ]; then
-			echo "ZeroTier config_path does not exist: $config_path" 1>&2
-			return
-		fi
-
-		# ensure that the target exists
-		mkdir -p $(dirname $path)
-
-		if [ "$copy_config_path" = "1" ]; then
-			cp -r $config_path $path
-		else
-			ln -s $config_path $path
-		fi
-	fi
-
-	mkdir -p $path/networks.d
-
-	# link latest default config path to latest config path
-	rm -f $CONFIG_PATH
-	ln -s $path $CONFIG_PATH
-
-	if [ -n "$port" ]; then
-		args="$args -p${port}"
-	fi
-
-	if [ -z "$secret" ]; then
-		echo "Generate secret - please wait..."
-		local sf="/tmp/zt.$cfg.secret"
-
-		zerotier-idtool generate "$sf" > /dev/null
-		[ $? -ne 0 ] && return 1
-
-		secret="$(cat $sf)"
-		rm "$sf"
-
-		uci set zerotier.$cfg.secret="$secret"
-		uci commit zerotier
-	fi
-
-	if [ -n "$secret" ]; then
-		echo "$secret" > $path/identity.secret
-		# make sure there is not previous identity.public
-		rm -f $path/identity.public
-	fi
-
-	if [ -f "$local_conf" ]; then
-		ln -s "$local_conf" $path/local.conf
-	fi
-
-	add_join() {
-		# an (empty) config file will cause ZT to join a network
-		touch $path/networks.d/$1.conf
-	}
-
-	config_list_foreach $cfg 'join' add_join
-
-	procd_open_instance
-	procd_set_param command $PROG $args $path
-	procd_set_param stderr 1
+    procd_open_instance
+	procd_set_param command $PROG $ARGS $CONFIG_PATH
+	procd_set_param stdout 1
+    procd_set_param stderr 1
 	procd_set_param respawn
 	procd_close_instance
 }
 
-start_service() {
-	config_load 'zerotier'
-	config_foreach start_instance 'zerotier'
+start_instance() {
+    local INSTANCE_ID=$1
+    local ZT_ENABLED CONFIG_MODE PLANET_INIT_MODE PLANET_INIT_URL LOCAL_CONF LOCAL_CONF_CONTENT PORT SECRET AUTHTOKEN
+
+    echo "start zerotier init."
+
+    # 判断是否启用
+    config_get_bool ZT_ENABLED "$INSTANCE_ID" "zt_enabled" 0
+    if [[ $ZT_ENABLED -eq 0 ]]; then
+        echo "zerotier are disabled in config."
+        return 1
+    fi
+
+    # 获取配置模式
+    config_get CONFIG_MODE "$INSTANCE_ID" "config_mode" "init"
+    if [[ "rewrite" == "$CONFIG_MODE" ]]; then
+        echo "zerotier run at rewrite mode."
+        rm -rf $CONFIG_PATH/* > /dev/null
+    else
+        if [[ -e $CONFIG_PATH/authtoken.secret && -e $CONFIG_PATH/identity.public && -e $CONFIG_PATH/identity.secret ]]; then
+            echo "zerotier already init, Start instance."
+            start_zerotier "" $CONFIG_PATH
+            return 1
+        else
+            echo "create zerotier home directory".
+            mkdir -p $CONFIG_PATH
+        fi
+    fi
+
+    # 获取一堆信息
+    config_get PLANET_INIT_MODE "$INSTANCE_ID" "planet_init_mode" "default"
+    config_get PLANET_INIT_URL "$INSTANCE_ID" "planet_init_url" ""
+    config_get_bool LOCAL_CONF "$INSTANCE_ID" "lcoal_conf" 0
+    config_get LOCAL_CONF_CONTENT "$INSTANCE_ID" "local_conf_content" ""
+    config_get PORT "$INSTANCE_ID" "port" "0"
+    config_get SECRET "$INSTANCE_ID" "secret" ""
+    config_get AUTHTOKEN "$INSTANCE_ID" "authtoken" ""
+
+    # 获取 planet
+    if [[ "URL" == "$PLANET_INIT_MODE" ]]; then
+        echo "CURL recive planet info, please wait."
+        curl -sL "$PLANET_INIT_URL" > $CONFIG_PATH/planet
+    fi
+
+    # 写入 local.conf
+    if [[ $LOCAL_CONF -ne 0 ]]; then
+        echo "zerotier write local.conf"
+        echo $LOCAL_CONF_CONTENT > $CONFIG_PATH/local.conf
+    fi
+
+    # 写入端口号
+    if [[ $PORT -ne 0 ]]; then
+        echo "zerotier write zerotier-one.port"
+        echo $PORT > $CONFIG_PATH/zerotier-one.port
+    fi
+
+    # 写入 SECRET
+    if [[ -n "$SECRET" ]]; then
+        # 覆写现有的密钥文件
+        rm -f $CONFIG_PATH/identity.public > /dev/null
+        rm -f $CONFIG_PATH/identity.secret > /dev/null
+
+        echo "zerotier create secret file from config."
+
+        echo "$SECRET" | cut -d ":" -f 1,2,3 > $CONFIG_PATH/identity.public
+        echo "$SECRET" > $CONFIG_PATH/identity.secret
+    else
+        # 密钥为空则生成一个
+        rm -f $CONFIG_PATH/identity.public > /dev/null
+        rm -f $CONFIG_PATH/identity.secret > /dev/null
+
+        echo "generate identity.secret - please wait..."
+		local TMP_SECRET="/tmp/zerotier.secret"
+
+		zerotier-idtool generate "$TMP_SECRET" > /dev/null
+        if [[ $? -ne 0 ]]; then
+            echo "generate identity.secret fail."
+            return 1;
+        fi
+
+        SECRET=`cat $TMP_SECRET`
+        rm $TMP_SECRET
+
+        uci set zerotier.$INSTANCE_ID.secret="$SECRET"
+        uci commit zerotier
+
+        echo "$SECRET" | cut -d ":" -f 1,2,3 > $CONFIG_PATH/identity.public
+        echo "$SECRET" > $CONFIG_PATH/identity.secret
+    fi
+
+    # 写入 authtoken
+    if [[ -z "$AUTHTOKEN" ]]; then
+        echo "generate authtoken.secret."
+        # authtoken 为空则用随机 uuid 代替
+        AUTHTOKEN=`cat /proc/sys/kernel/random/uuid | md5sum | cut -d " " -f 1`
+    fi
+    echo "$AUTHTOKEN" > $CONFIG_PATH/authtoken.secret
+
+    uci set zerotier.$INSTANCE_ID.authtoken="$AUTHTOKEN"
+    uci commit zerotier
+
+    # 读取并写入 network 信息
+    mkdir -p $CONFIG_PATH/networks.d
+    config_list_foreach "$INSTANCE_ID" "join" handle_network_join "$CONFIG_PATH"
+
+    # 读取 network 附加配置信息并处理
+    config_foreach handle_network_config "network" "$CONFIG_PATH"
+
+    echo "start zerotier instance."
+    local ARGS="-p$PORT"
+    start_zerotier $ARGS $CONFIG_PATH
+    return 1;
+}
+
+handle_network_join() {
+    local NETWORK_ID=$1
+    local CONFIG_PATH=$2
+
+    # 写入一个空文件
+    touch $CONFIG_PATH/networks.d/$NETWORK_ID.conf
+}
+
+handle_network_config() {
+    local NETWORK_CONFIG_ID=$1
+    local CONFIG_PATH=$2
+    local NETWORK_ENABLED NETWORK_ID IFNAME NAT ALLOW_MANAGED ALLOW_GLOBAL ALLOW_DEFAULT ALLOW_DNS
+    
+    config_get_bool NETWORK_ENABLED "$NETWORK_CONFIG_ID" "network_enabled" 0
+    config_get NETWORK_ID "$NETWORK_CONFIG_ID" "id" ""
+    config_get IFNAME "$NETWORK_CONFIG_ID" "ifname" ""
+    config_get_bool NAT "$NETWORK_CONFIG_ID" "nat" 0
+
+    if [[ $NETWORK_ENABLED -eq 0 && -e $CONFIG_PATH/networks.d/$NETWORK_ID.conf ]]; then
+        rm -rf $CONFIG_PATH/networks.d/$NETWORK_ID.conf > /dev/null
+        rm -rf $CONFIG_PATH/networks.d/$NETWORK_ID.local.conf > /dev/null
+    fi
+
+    if [[ -n "$IFNAME" ]]; then
+        if [[ ! -e $CONFIG_PATH/devicemap ]]; then
+            echo "create empty devicemap file."
+            touch $CONFIG_PATH/devicemap
+        fi
+
+        if [[ `cat $CONFIG_PATH/devicemap | grep "$NETWORK_ID" | wc -l` -eq 0 ]]; then
+            echo "add network device map"
+            echo "${NETWORK_ID}=${IFNAME}" >> $CONFIG_PATH/devicemap
+        else
+            echo "change network device map"
+            sed -i -r "s/${NETWORK_ID}=[0-9a-zA-Z]+/${NETWORK_ID}=${IFNAME}/g" $CONFIG_PATH/devicemap
+        fi
+    fi
+
+    config_get_bool ALLOW_MANAGED "$NETWORK_CFG_ID" "allow_managed" 1
+    config_get_bool ALLOW_GLOBAL "$NETWORK_CFG_ID" "allow_global" 0
+    config_get_bool ALLOW_DEFAULT "$NETWORK_CFG_ID" "allow_default" 0
+    config_get_bool ALLOW_DNS "$NETWORK_CFG_ID" "allow_dns" 0
+
+    cat>$CONFIG_PATH/networks.d/$NETWORK_ID.local.conf<<EOF
+allowManaged=${ALLOW_MANAGED}
+allowGlobal=${ALLOW_GLOBAL}
+allowDefault=${ALLOW_DEFAULT}
+allowDNS=${ALLOW_DNS}
+EOF
+    # TODO NAT
 }
 
 stop_instance() {
-	local cfg="$1"
+    local PIDFILE
+    PIDFILE=$CONFIG_PATH/zerotier-one.pid
 
-	# Remove existing link or folder
-	rm -rf ${CONFIG_PATH}_${cfg}
+    if [[ -e "$PIDFILE" ]]; then
+        kill -9 `cat $PIDFILE`
+        RETVAL=$?
+        [ $RETVAL -eq 0 ] && [ -e "$PIDFILE" ] && rm -f $PIDFILE
+    fi
+}
+
+start_service() {
+    config_load 'zerotier'
+    config_foreach start_instance 'zerotier'
 }
 
 stop_service() {
-	config_load 'zerotier'
-	config_foreach stop_instance 'zerotier'
-	rm -f ${CONFIG_PATH}
+	stop_instance
 }
 
 reload_service() {
@@ -122,5 +211,6 @@ reload_service() {
 }
 
 service_triggers() {
-	procd_add_reload_trigger 'zerotier'
+	procd_add_reload_trigger "zerotier"
+	procd_add_interface_trigger "interface.*.up" wan /etc/init.d/zerotier restart
 }

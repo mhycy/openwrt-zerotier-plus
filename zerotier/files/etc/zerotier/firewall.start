@@ -1,0 +1,60 @@
+#!/bin/sh
+
+. /lib/functions.sh
+. /usr/share/libubox/jshn.sh
+
+. /etc/zerotier/common
+
+RETRY=20
+INTERVAL=1
+
+handle_zerotier_instance() {
+    local INSTANCE_ID=$1
+
+    config_get_bool ZT_ENABLED "$INSTANCE_ID" "zt_enabled" 0
+
+    if [[ $ZT_ENABLED -eq 0 ]]; then
+        echo "zerotier disabled in config. exit."
+        exit 0;
+    fi
+
+    if [[ `wait_zerotier_online $RETRY $INTERVAL` -ne 0 ]]; then
+        echo "start zerotier firewall"
+        config_foreach handle_zerotier_network 'network'
+    else
+        echo "zerotier service offline. exit"
+    fi
+}
+
+handle_zerotier_network() {
+    local INSTANCE_ID=$1
+    local NETWORK_ENABLED NETWORK_ID NAT
+
+    config_get_bool NETWORK_ENABLED "$INSTANCE_ID" "network_enabled" 0
+    config_get NETWORK_ID "$INSTANCE_ID" "id" ""
+    config_get_bool NAT "$INSTANCE_ID" "nat" 0
+
+    if [[ $NETWORK_ENABLED -ne 0 && -n "$NETWORK_ID" && "$NAT" -eq 1 ]]; then
+        # 如果网络启用状态 且 NAT 为激活状态
+        local PORT_DEVICE_NAME
+        get_network_device_name PORT_DEVICE_NAME $NETWORK_ID
+        if [[ -n $PORT_DEVICE_NAME ]]; then
+            echo "network id: <$NETWORK_ID>, device name: <$PORT_DEVICE_NAME>, create nat rules."
+
+            iptables -I FORWARD -i "$PORT_DEVICE_NAME" -j ACCEPT
+            iptables -I FORWARD -o "$PORT_DEVICE_NAME" -j ACCEPT
+            iptables -t nat -I POSTROUTING -o "$PORT_DEVICE_NAME" -j MASQUERADE
+            
+            IP_SEGMENT="$(ip route | grep "dev $PORT_DEVICE_NAME proto kernel" | awk '{print $1}')"
+            if [[ -n $IP_SEGMENT ]]; then
+                iptables -t nat -I POSTROUTING -s "${IP_SEGMENT}" -j MASQUERADE
+            fi
+        else
+            echo "fail to get network device name, continue"
+            return 0;
+        fi
+    fi
+}
+
+config_load 'zerotier'
+config_foreach handle_zerotier_instance 'zerotier'
