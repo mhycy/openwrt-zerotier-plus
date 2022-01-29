@@ -5,7 +5,7 @@
 
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=zerotier
+PKG_NAME:=zerotier-plus
 PKG_VERSION:=1.8.4
 PKG_RELEASE:=$(AUTORELEASE)
 
