@@ -151,6 +151,10 @@ handle_network_config() {
     config_get IFNAME "$NETWORK_CONFIG_ID" "ifname" ""
     config_get_bool NAT "$NETWORK_CONFIG_ID" "nat" 0
 
+    if [[ $NETWORK_ENABLED -ne 0 ]]; then
+        touch $CONFIG_PATH/networks.d/$NETWORK_ID.conf
+    fi
+
     if [[ $NETWORK_ENABLED -eq 0 && -e $CONFIG_PATH/networks.d/$NETWORK_ID.conf ]]; then
         rm -rf $CONFIG_PATH/networks.d/$NETWORK_ID.conf > /dev/null
         rm -rf $CONFIG_PATH/networks.d/$NETWORK_ID.local.conf > /dev/null

@@ -10,7 +10,7 @@ config zerotier
     # Planet 初始化模式
     # default -- 使用编译内置的 planet 信息
     # url -- 在启动的时候动态下载
-    option planet_init_mode ''
+    option planet_init_mode 'default'
     option planet_init_url ''
 
     # local.conf 配置
@@ -41,7 +41,7 @@ config network
     # 网络 ID
     option id '8056c2e21c000001'
 
-    # 定义接口名字, 写入到 /<config-root>/devicemap
+    # 定义接口名字
     option ifname 'zt0'
 
     # 是否开启 NAT 模式, 会影响防火墙行为
