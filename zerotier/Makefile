@@ -25,7 +25,7 @@ PKG_BUILD_PARALLEL:=1
 
 include $(INCLUDE_DIR)/package.mk
 
-define Package/zerotier
+define Package/$(PKG_NAME)
   SECTION:=net
   CATEGORY:=Network
   DEPENDS:=+libpthread +libstdcpp +kmod-tun +ip +libminiupnpc +libnatpmp
@@ -34,11 +34,11 @@ define Package/zerotier
   SUBMENU:=VPN
 endef
 
-define Package/zerotier/description
+define Package/$(PKG_NAME)/description
 	ZeroTier creates a global provider-independent virtual private cloud network.
 endef
 
-define Package/zerotier/config
+define Package/$(PKG_NAME)/config
 	source "$(SOURCE)/Config.in"
 endef
 
@@ -61,11 +61,11 @@ endef
 TARGET_CFLAGS += -ffunction-sections -fdata-sections
 TARGET_LDFLAGS += -Wl,--gc-sections,--as-needed
 
-define Package/zerotier/conffiles
+define Package/$(PKG_NAME)/conffiles
 /etc/config/zerotier
 endef
 
-define Package/zerotier/install
+define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/zerotier-one $(1)/usr/bin/
 	$(LN) zerotier-one $(1)/usr/bin/zerotier-cli
