@@ -1,37 +1,37 @@
 config zerotier
     # 开关
-    option zt_enabled 1
+    option zt_enabled 0
 
     # 配置模式
     # init -- UCI 配置只用于初始化
     # rewrite -- 每次启动都使用 UCI 配置覆盖文件（会删除原始目录）
-    option config_mode
+    option config_mode 'init'
     
     # Planet 初始化模式
     # default -- 使用编译内置的 planet 信息
     # url -- 在启动的时候动态下载
     option planet_init_mode ''
-    option planet_init_url 'http://xxxxx.xxx.xxx.xxxx'
+    option planet_init_url ''
 
     # local.conf 配置
     # 如果 local_conf 配置为 true 则用 local_conf_content 覆盖目录下的 local.conf 文件
     option lcoal_conf 0
-    option local_conf_content '{"settings": {"interfacePrefixBlacklist": [ "docker", "br" ]}}'
+    option local_conf_content '{"settings": {"interfacePrefixBlacklist": [ "docker" ]}}'
 
     # 端口号, 0 或不设定则使用动态端口
-    option port 9993
+    # option port 9993
 
     # 用于 zerotier 的密钥，自带地址信息与证书，留空会自动生成
-    option secret ''
+    # option secret ''
 
     # ZeroTier HTTP 接口访问用的 token, 留空会自动生成
-    option authtoken ''
+    # option authtoken ''
 
     # moon 节点动态添加
-    list orbit "<world-id> <seed>"
+    # list orbit "<world-id> <seed>"
 
     # 网络动态添加
-    list join "<network-id>"
+    # list join "<network-id>"
 
 # 网络配置信息
 config network

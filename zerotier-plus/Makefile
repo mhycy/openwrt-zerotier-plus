@@ -74,7 +74,9 @@ ifeq ($(CONFIG_ZEROTIER_PLUS_ENABLE_SELFTEST),y)
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/zerotier-selftest $(1)/usr/bin/
 endif
 
+	chmod +x ./files/etc/zerotier/*
 	$(CP) ./files/* $(1)/
+
 endef
 
 $(eval $(call BuildPackage,$(PKG_NAME)))
