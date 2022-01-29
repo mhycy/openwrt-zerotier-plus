@@ -78,4 +78,4 @@ endif
 	$(CP) ./files/* $(1)/
 endef
 
-$(eval $(call BuildPackage,zerotier))
+$(eval $(call BuildPackage,$(PKG_NAME)))
