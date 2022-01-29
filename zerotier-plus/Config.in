@@ -1,12 +1,12 @@
 menu "Configuration"
 	depends on PACKAGE_zerotier-plus
 
-config ZEROTIER_ENABLE_DEBUG
+config ZEROTIER_PLUS_ENABLE_DEBUG
 	bool "Build in debug mode"
 	depends on PACKAGE_zerotier-plus
 	default n
 
-config ZEROTIER_ENABLE_SELFTEST
+config ZEROTIER_PLUS_ENABLE_SELFTEST
 	bool "Build a self test program"
 	depends on PACKAGE_zerotier-plus
 	default n

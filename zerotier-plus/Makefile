@@ -14,7 +14,6 @@ PKG_SOURCE_URL:=https://github.com/mhycy/zerotier-plus.git
 PKG_SOURCE_DATE:=2022-01-24
 PKG_SOURCE_VERSION:=9a394e8f7683e1a5f148b3d61d6dc9ea631f1beb
 PKG_MIRROR_HASH:=skip
-#PKG_BUILD_DIR:=$(BUILD_DIR)/ZeroTierOne-$(PKG_VERSION)
 
 PKG_MAINTAINER:=mhycy <i@mhycy.me>
 PKG_LICENSE:=BSL 1.1
@@ -42,7 +41,7 @@ define Package/$(PKG_NAME)/config
 	source "$(SOURCE)/Config.in"
 endef
 
-ifeq ($(CONFIG_ZEROTIER_ENABLE_DEBUG),y)
+ifeq ($(CONFIG_ZEROTIER_PLUS_ENABLE_DEBUG),y)
 MAKE_FLAGS += ZT_DEBUG=1
 endif
 
@@ -52,7 +51,7 @@ MAKE_FLAGS += \
 
 define Build/Compile
 	$(call Build/Compile/Default,one)
-ifeq ($(CONFIG_ZEROTIER_ENABLE_SELFTEST),y)
+ifeq ($(CONFIG_ZEROTIER_PLUS_ENABLE_SELFTEST),y)
 	$(call Build/Compile/Default,selftest)
 endif
 endef
@@ -71,7 +70,7 @@ define Package/$(PKG_NAME)/install
 	$(LN) zerotier-one $(1)/usr/bin/zerotier-cli
 	$(LN) zerotier-one $(1)/usr/bin/zerotier-idtool
 
-ifeq ($(CONFIG_ZEROTIER_ENABLE_SELFTEST),y)
+ifeq ($(CONFIG_ZEROTIER_PLUS_ENABLE_SELFTEST),y)
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/zerotier-selftest $(1)/usr/bin/
 endif
 
